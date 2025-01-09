@@ -25,7 +25,7 @@ const Toolbar = ({ setElementType, onClick }: ToolbarProps) => {
     <ToggleGroup
       type="single"
       size={"lg"}
-      className="shadow-md p-1 rounded-md z-50"
+      className="border shadow-md p-2 px-4 rounded-full z-50 bg-background"
       value={selectedTool}
       onValueChange={handleValueChange}
       onClick={onClick}

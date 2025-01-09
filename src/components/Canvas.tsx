@@ -214,9 +214,10 @@ export default function Canvas() {
 
   return (
     <div className="h-full w-full relative">
-      <div className="absolute top-0 left-1/2 z-50 flex items-center justify-center mt-4">
+      <div className="absolute top-0 left-1/2 z-50 transform -translate-x-1/2 mt-4">
         <Toolbar setElementType={setTool} onClick={onClick} />
       </div>
+
       <canvas
         className="z-10"
         ref={canvasRef}
