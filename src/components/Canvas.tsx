@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import rough from "roughjs";
 import { Drawable } from "roughjs/bin/core";
 import Toolbar from "./Toolbar";
+
 export enum Tools {
   line = "line",
   rectangle = "rectangle",
@@ -10,17 +11,12 @@ export enum Tools {
   select = "select",
 }
 
-// interface Point {
-//   x: number;
-//   y: number;
-// }
+interface Point {
+  x: number;
+  y: number;
+}
 
 type Action = "none" | "drawing" | "moving";
-interface SelectedElement {
-  element: Element;
-  offsetX: number;
-  offsetY: number;
-}
 
 interface Element {
   id: number;
@@ -30,6 +26,20 @@ interface Element {
   y2: number;
   roughElement: Drawable;
   elementType: Tools;
+  position?: string | null;
+}
+
+interface SelectedElement {
+  element: Element;
+  offsetX: number;
+  offsetY: number;
+}
+
+interface ElementCoordinates {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 }
 
 const generator = rough.generator();
@@ -41,8 +51,8 @@ function createElement(
   x2: number,
   y2: number,
   elementType: Tools
-) {
-  if (elementType == Tools.select) {
+): Element | null {
+  if (elementType === Tools.select) {
     return null;
   }
   if (elementType === Tools.line) {
@@ -61,19 +71,25 @@ function createElement(
     const roughElement = generator.ellipse(cx, cy, width, height);
     return { id, x1, y1, x2, y2, roughElement, elementType };
   }
+  return null;
 }
 
-const isWithinElement = (x: number, y: number, element: Element) => {
+const positionWithinElement = (
+  x: number,
+  y: number,
+  element: Element
+): string | null => {
   const { x1, y1, x2, y2, elementType } = element;
   if (elementType === Tools.rectangle) {
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minY = Math.min(y1, y2);
-    const maxY = Math.max(y1, y2);
-    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+    const topLeft = nearPoint(x, y, x1, y1, "topLeft");
+    const topRight = nearPoint(x, y, x2, y1, "topRight");
+    const bottomLeft = nearPoint(x, y, x1, y2, "bottomLeft");
+    const bottomRight = nearPoint(x, y, x2, y2, "bottomRight");
+    const inside = x >= x1 && x <= x2 && y >= y1 && y <= y2 ? "inside" : null;
+    return topLeft || inside || topRight || bottomLeft || bottomRight;
   } else if (elementType === Tools.line) {
-    const a = { x: x1, y: y1 };
-    const b = { x: x2, y: y2 };
+    const a: Point = { x: x1, y: y1 };
+    const b: Point = { x: x2, y: y2 };
     const distanceFromLine =
       Math.abs((b.y - a.y) * x - (b.x - a.x) * y + b.x * a.y - b.y * a.x) /
       Math.sqrt((b.y - a.y) ** 2 + (b.x - a.x) ** 2);
@@ -82,8 +98,10 @@ const isWithinElement = (x: number, y: number, element: Element) => {
       x <= Math.max(a.x, b.x) &&
       Math.min(a.y, b.y) <= y &&
       y <= Math.max(a.y, b.y);
-
-    return distanceFromLine <= 5 && withinLineBounds;
+    const start = nearPoint(x, y, x1, y1, "start");
+    const end = nearPoint(x, y, x2, y2, "end");
+    const inside = distanceFromLine <= 10 && withinLineBounds ? "inside" : null;
+    return start || end || inside;
   } else if (elementType === Tools.ellipse) {
     const centerX = (x1 + x2) / 2;
     const centerY = (y1 + y2) / 2;
@@ -91,13 +109,76 @@ const isWithinElement = (x: number, y: number, element: Element) => {
     const b = Math.abs(y2 - y1) / 2;
     const normalizedX = (x - centerX) / a;
     const normalizedY = (y - centerY) / b;
-    return normalizedX ** 2 + normalizedY ** 2 <= 1;
+    const inside = normalizedX ** 2 + normalizedY ** 2 <= 1 ? "inside" : null;
+    const topLeft = nearPoint(x, y, x1, y1, "topLeft");
+    const topRight = nearPoint(x, y, x2, y1, "topRight");
+    const bottomLeft = nearPoint(x, y, x1, y2, "bottomLeft");
+    const bottomRight = nearPoint(x, y, x2, y2, "bottomRight");
+    return inside || topLeft || topRight || bottomLeft || bottomRight;
   }
+  return null;
 };
 
-function getElementAtPosition(x: number, y: number, elements: Element[]) {
-  return elements.find((element) => isWithinElement(x, y, element));
+function nearPoint(
+  x: number,
+  y: number,
+  x1: number,
+  y1: number,
+  pos: string
+): string | null {
+  return Math.abs(x - x1) < 5 && Math.abs(y - y1) < 5 ? pos : null;
 }
+
+function cursorForPosition(position: string | null): string {
+  switch (position) {
+    case "inside":
+      return "move";
+    case "start":
+    case "end":
+      return "nesw-resize";
+    case "topLeft":
+    case "bottomRight":
+      return "nwse-resize";
+    case "topRight":
+    case "bottomLeft":
+      return "nesw-resize";
+    default:
+      return "default";
+  }
+}
+
+function getElementAtPosition(
+  x: number,
+  y: number,
+  elements: Element[]
+): Element | undefined {
+  return elements
+    .map((element) => ({
+      ...element,
+      position: positionWithinElement(x, y, element),
+    }))
+    .find((element) => element.position !== null);
+}
+
+const adjustElementCoordinates = (element: Element): ElementCoordinates => {
+  const { x1, y1, x2, y2, elementType } = element;
+
+  if (elementType === Tools.rectangle || elementType === Tools.ellipse) {
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+    return { x1: minX, y1: minY, x2: maxX, y2: maxY };
+  } else if (elementType === Tools.line) {
+    if (x1 < x2 || (x1 === x2 && y1 < y2)) {
+      return { x1, y1, x2, y2 };
+    } else {
+      return { x1: x2, y1: y2, x2: x1, y2: y1 };
+    }
+  }
+
+  return { x1, y1, x2, y2 };
+};
 
 export default function Canvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -109,14 +190,17 @@ export default function Canvas() {
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    if (!canvas) return;
 
-      const roughCanvas = rough.canvas(canvas);
-      elements.forEach((element) => roughCanvas.draw(element.roughElement));
-    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const roughCanvas = rough.canvas(canvas);
+    elements.forEach(({ roughElement }) => roughCanvas.draw(roughElement));
   }, [elements]);
 
   const updateElement = (
@@ -127,10 +211,12 @@ export default function Canvas() {
     y2: number,
     elementType: Tools
   ) => {
-    const updatedElement = createElement(index, x1, y1, x2, y2, elementType);
-    const updatedElements = [...elements];
-    updatedElements[index] = updatedElement!;
-    setElements(updatedElements);
+    const element = createElement(index, x1, y1, x2, y2, elementType);
+    if (!element) return;
+
+    const elementsCopy = [...elements];
+    elementsCopy[index] = element;
+    setElements(elementsCopy);
   };
 
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -154,24 +240,24 @@ export default function Canvas() {
         clientY,
         tool
       );
-      setElements((prev) => [...prev, element!]);
+      if (element) {
+        setElements((prev) => [...prev, element]);
+      }
     }
   };
 
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { clientX, clientY } = e;
-    if (action === "none") {
-      if (tool === Tools.select) {
-        const element = getElementAtPosition(clientX, clientY, elements);
-        e.currentTarget.style.cursor = element ? "move" : "default";
-      }
+
+    if (action === "none" && tool === Tools.select) {
+      const element = getElementAtPosition(clientX, clientY, elements);
+      e.currentTarget.style.cursor = element
+        ? cursorForPosition(element.position!)
+        : "default";
       return;
     }
-    if (
-      tool === Tools.ellipse ||
-      tool === Tools.rectangle ||
-      tool === Tools.line
-    ) {
+
+    if (tool !== Tools.select) {
       e.currentTarget.style.cursor = "crosshair";
     }
 
@@ -187,6 +273,7 @@ export default function Canvas() {
       const height = y2 - y1;
       const nextX1 = clientX - offsetX;
       const nextY1 = clientY - offsetY;
+
       updateElement(
         id,
         nextX1,
@@ -199,10 +286,19 @@ export default function Canvas() {
   };
 
   const onMouseUp = () => {
+    if (elements.length > 0 && action === "drawing") {
+      const index = elements.length - 1;
+      const { id, elementType } = elements[index];
+      const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
+      updateElement(id, x1, y1, x2, y2, elementType);
+    }
+
     setAction("none");
     setSelectedElement(null);
-    if (canvasRef.current && tool === Tools.select) {
-      canvasRef.current.style.cursor = "default";
+
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor =
+        tool === Tools.select ? "default" : "crosshair";
     }
   };
 
@@ -221,11 +317,10 @@ export default function Canvas() {
       <canvas
         className="z-10"
         ref={canvasRef}
-        //style={{ backgroundColor: "blue" }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-      ></canvas>
+      />
     </div>
   );
 }
