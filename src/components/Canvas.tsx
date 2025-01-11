@@ -16,7 +16,7 @@ interface Point {
   y: number;
 }
 
-type Action = "none" | "drawing" | "moving";
+type Action = "none" | "drawing" | "moving" | "resizing";
 
 interface Element {
   id: number;
@@ -180,6 +180,31 @@ const adjustElementCoordinates = (element: Element): ElementCoordinates => {
   return { x1, y1, x2, y2 };
 };
 
+const resizedCoordinates = (
+  clientX: number,
+  clientY: number,
+  position: string,
+  coordinates: { x1: number; y1: number; x2: number; y2: number }
+) => {
+  const { x1, y1, x2, y2 } = coordinates;
+  switch (position) {
+    case "start":
+      return { x1: clientX, y1: clientY, x2: x2, y2: y2 };
+    case "end":
+      return { x1: x1, y1: y1, x2: clientX, y2: clientY };
+    case "topLeft":
+      return { x1: clientX, y1: clientY, x2: x2, y2: y2 };
+    case "topRight":
+      return { x1: x1, y1: clientY, x2: clientX, y2: y2 };
+    case "bottomLeft":
+      return { x1: clientX, y1: y1, x2: x2, y2: clientY };
+    case "bottomRight":
+      return { x1: x1, y1: y1, x2: clientX, y2: clientY };
+    default:
+      return { x1, y1, x2, y2 };
+  }
+};
+
 export default function Canvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [elements, setElements] = useState<Element[]>([]);
@@ -224,10 +249,14 @@ export default function Canvas() {
     if (tool === Tools.select) {
       const element = getElementAtPosition(clientX, clientY, elements);
       if (element) {
-        setAction("moving");
         const offsetX = clientX - element.x1;
         const offsetY = clientY - element.y1;
         setSelectedElement({ element, offsetX, offsetY });
+        if (element.position === "inside") {
+          setAction("moving");
+        } else {
+          setAction("resizing");
+        }
       }
     } else {
       setAction("drawing");
@@ -242,6 +271,7 @@ export default function Canvas() {
       );
       if (element) {
         setElements((prev) => [...prev, element]);
+        setSelectedElement({ element, offsetX: 0, offsetY: 0 });
       }
     }
   };
@@ -282,11 +312,24 @@ export default function Canvas() {
         nextY1 + height,
         elementType
       );
+    } else if (action === "resizing" && selectedElement) {
+      const { element } = selectedElement;
+      const { id, elementType, position, ...coordinates } = element;
+      const { x1, y1, x2, y2 } = resizedCoordinates(
+        clientX,
+        clientY,
+        position!,
+        coordinates
+      );
+      updateElement(id, x1, y1, x2, y2, elementType);
     }
   };
 
   const onMouseUp = () => {
-    if (elements.length > 0 && action === "drawing") {
+    if (
+      (elements.length > 0 && action === "drawing") ||
+      action === "resizing"
+    ) {
       const index = elements.length - 1;
       const { id, elementType } = elements[index];
       const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
