@@ -64,11 +64,13 @@ function createElement(
     return { id, x1, y1, x2, y2, roughElement, elementType };
   }
   if (elementType === Tools.ellipse) {
-    const cx = (x1 + x2) / 2;
-    const cy = (y1 + y2) / 2;
+    // Ensure correct width and height calculation
     const width = Math.abs(x2 - x1);
     const height = Math.abs(y2 - y1);
+    const cx = (x1 + x2) / 2;
+    const cy = (y1 + y2) / 2;
     const roughElement = generator.ellipse(cx, cy, width, height);
+    // Return with original coordinates for proper resizing
     return { id, x1, y1, x2, y2, roughElement, elementType };
   }
   return null;
@@ -249,12 +251,14 @@ export default function Canvas() {
     if (tool === Tools.select) {
       const element = getElementAtPosition(clientX, clientY, elements);
       if (element) {
-        const offsetX = clientX - element.x1;
-        const offsetY = clientY - element.y1;
-        setSelectedElement({ element, offsetX, offsetY });
         if (element.position === "inside") {
+          const offsetX = clientX - element.x1;
+          const offsetY = clientY - element.y1;
+          setSelectedElement({ element, offsetX, offsetY });
           setAction("moving");
         } else {
+          // For resizing, we don't need offset coordinates
+          setSelectedElement({ element, offsetX: 0, offsetY: 0 });
           setAction("resizing");
         }
       }
@@ -315,13 +319,15 @@ export default function Canvas() {
     } else if (action === "resizing" && selectedElement) {
       const { element } = selectedElement;
       const { id, elementType, position, ...coordinates } = element;
-      const { x1, y1, x2, y2 } = resizedCoordinates(
-        clientX,
-        clientY,
-        position!,
-        coordinates
-      );
-      updateElement(id, x1, y1, x2, y2, elementType);
+      if (position) {
+        const { x1, y1, x2, y2 } = resizedCoordinates(
+          clientX,
+          clientY,
+          position,
+          coordinates
+        );
+        updateElement(id, x1, y1, x2, y2, elementType);
+      }
     }
   };
 
