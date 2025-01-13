@@ -1,8 +1,10 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import rough from "roughjs";
 import { Drawable } from "roughjs/bin/core";
 import Toolbar from "./Toolbar";
+import useHistory from "@/hooks/useHistory";
+import { Button } from "./ui/button";
 
 export enum Tools {
   line = "line",
@@ -18,7 +20,7 @@ interface Point {
 
 type Action = "none" | "drawing" | "moving" | "resizing";
 
-interface Element {
+export interface Element {
   id: number;
   x1: number;
   y1: number;
@@ -209,11 +211,32 @@ const resizedCoordinates = (
 
 export default function Canvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [elements, setElements] = useState<Element[]>([]);
+  const {
+    currentElements: elements,
+    setState: setElements,
+    undo,
+    redo,
+  } = useHistory([]);
   const [action, setAction] = useState<Action>("none");
   const [tool, setTool] = useState<Tools>(Tools.line);
   const [selectedElement, setSelectedElement] =
     useState<SelectedElement | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "z" && event.ctrlKey) {
+        event.preventDefault();
+        undo();
+      } else if (event.key === "y" && event.ctrlKey) {
+        event.preventDefault();
+        redo();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [undo, redo]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -227,7 +250,10 @@ export default function Canvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const roughCanvas = rough.canvas(canvas);
-    elements.forEach(({ roughElement }) => roughCanvas.draw(roughElement));
+    if (elements.length > 0) {
+      elements.forEach(({ roughElement }) => roughCanvas.draw(roughElement));
+    }
+    //elements.forEach(({ roughElement }) => roughCanvas.draw(roughElement));
   }, [elements]);
 
   const updateElement = (
@@ -243,7 +269,7 @@ export default function Canvas() {
 
     const elementsCopy = [...elements];
     elementsCopy[index] = element;
-    setElements(elementsCopy);
+    setElements(elementsCopy, true);
   };
 
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -256,10 +282,11 @@ export default function Canvas() {
           const offsetY = clientY - element.y1;
           setSelectedElement({ element, offsetX, offsetY });
           setAction("moving");
+          setElements((prev) => prev);
         } else {
-          // For resizing, we don't need offset coordinates
           setSelectedElement({ element, offsetX: 0, offsetY: 0 });
           setAction("resizing");
+          setElements((prev) => prev);
         }
       }
     } else {
@@ -274,7 +301,7 @@ export default function Canvas() {
         tool
       );
       if (element) {
-        setElements((prev) => [...prev, element]);
+        setElements([...elements, element]);
         setSelectedElement({ element, offsetX: 0, offsetY: 0 });
       }
     }
@@ -370,6 +397,10 @@ export default function Canvas() {
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
       />
+      <div className="absolute bottom-0 left-0 pl-4 z-50 transform  mt-4 flex flex-row gap-2 pb-4">
+        <Button onClick={undo}>Undo</Button>
+        <Button onClick={redo}>Redo</Button>
+      </div>
     </div>
   );
 }
