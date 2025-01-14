@@ -1,5 +1,5 @@
+import { Element } from "@/types/canvasTypes";
 import { useState, useCallback } from "react";
-import { Element } from "@/components/Canvas";
 
 interface HistoryState {
   currentElements: Element[];

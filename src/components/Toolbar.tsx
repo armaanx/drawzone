@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Circle, Minus, MousePointer2, Square } from "lucide-react";
-import { Tools } from "./Canvas";
+import { Tools } from "@/types/canvasTypes";
 
 interface ToolbarProps {
   setElementType: (elementType: Tools) => void;
