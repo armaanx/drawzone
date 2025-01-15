@@ -1,15 +1,23 @@
-import { useState } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Circle, Minus, MousePointer2, Square } from "lucide-react";
 import { Tools } from "@/types/canvasTypes";
+import {
+  Circle,
+  Minus,
+  MousePointer2,
+  Pencil,
+  Square,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
 
 interface ToolbarProps {
   setElementType: (elementType: Tools) => void;
   onClick: () => void;
+  clear: () => void;
 }
 
-const Toolbar = ({ setElementType, onClick }: ToolbarProps) => {
-  const [selectedTool, setSelectedTool] = useState<Tools>(Tools.line);
+const Toolbar = ({ setElementType, onClick, clear }: ToolbarProps) => {
+  const [selectedTool, setSelectedTool] = useState<Tools>(Tools.pen);
 
   const handleValueChange = (value: string | null) => {
     if (!value) {
@@ -30,6 +38,9 @@ const Toolbar = ({ setElementType, onClick }: ToolbarProps) => {
       onValueChange={handleValueChange}
       onClick={onClick}
     >
+      <ToggleGroupItem value={Tools.pen} className="">
+        <Pencil />
+      </ToggleGroupItem>
       <ToggleGroupItem value={Tools.rectangle} className="">
         <Square />
       </ToggleGroupItem>
@@ -41,6 +52,17 @@ const Toolbar = ({ setElementType, onClick }: ToolbarProps) => {
       </ToggleGroupItem>
       <ToggleGroupItem value={Tools.select} className="">
         <MousePointer2 />
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="clear"
+        onClick={() => {
+          clear();
+          setElementType(Tools.pen);
+          setSelectedTool(Tools.pen);
+        }}
+        className=""
+      >
+        <Trash2 />
       </ToggleGroupItem>
     </ToggleGroup>
   );
