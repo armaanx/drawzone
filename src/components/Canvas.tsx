@@ -4,10 +4,19 @@ import {
   adjustElementCoordinates,
   createElement,
   cursorForPosition,
+  drawElement,
   getElementAtPosition,
   resizedCoordinates,
 } from "@/lib/canvasHelperFunctions";
-import { Action, SelectedElement, Tools } from "@/types/canvasTypes";
+import {
+  Action,
+  EllipseElement,
+  LineElement,
+  PenElement,
+  RectangleElement,
+  SelectedElement,
+  Tools,
+} from "@/types/canvasTypes";
 import { Redo2, Undo2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import rough from "roughjs";
@@ -23,9 +32,10 @@ export default function Canvas() {
     redo,
     canRedo,
     canUndo,
+    clear,
   } = useHistory([]);
   const [action, setAction] = useState<Action>("none");
-  const [tool, setTool] = useState<Tools>(Tools.line);
+  const [tool, setTool] = useState<Tools>(Tools.pen);
   const [selectedElement, setSelectedElement] =
     useState<SelectedElement | null>(null);
 
@@ -58,7 +68,7 @@ export default function Canvas() {
 
     const roughCanvas = rough.canvas(canvas);
     if (elements.length > 0) {
-      elements.forEach(({ roughElement }) => roughCanvas.draw(roughElement));
+      elements.forEach((element) => drawElement(roughCanvas, element, ctx));
     }
   }, [elements]);
 
@@ -70,11 +80,15 @@ export default function Canvas() {
     y2: number,
     elementType: Tools
   ) => {
-    const element = createElement(index, x1, y1, x2, y2, elementType);
-    if (!element) return;
-
     const elementsCopy = [...elements];
-    elementsCopy[index] = element;
+    if (elementType != Tools.pen) {
+      const element = createElement(index, x1, y1, x2, y2, elementType);
+      if (!element) return;
+      elementsCopy[index] = element;
+    } else if (elementType === Tools.pen) {
+      const el = elementsCopy[index] as PenElement;
+      el.points = [...el.points, { x: x2, y: y2 }];
+    }
     setElements(elementsCopy, true);
   };
 
@@ -84,11 +98,30 @@ export default function Canvas() {
       const element = getElementAtPosition(clientX, clientY, elements);
       if (element) {
         if (element.position === "inside") {
-          const offsetX = clientX - element.x1;
-          const offsetY = clientY - element.y1;
-          setSelectedElement({ element, offsetX, offsetY });
-          setAction("moving");
-          setElements((prev) => prev);
+          if (element.elementType === Tools.pen) {
+            const { points } = element as PenElement;
+            const xOffsets: number[] = points.map((point) => clientX - point.x);
+            const yOffsets: number[] = points.map((point) => clientY - point.y);
+            setSelectedElement({
+              element,
+              xOffsets,
+              yOffsets,
+              offsetX: 0,
+              offsetY: 0,
+            });
+            setAction("moving");
+            setElements((prev) => prev);
+          } else {
+            const { x1, y1 } = element as
+              | RectangleElement
+              | LineElement
+              | EllipseElement;
+            const offsetX = clientX - x1;
+            const offsetY = clientY - y1;
+            setSelectedElement({ element, offsetX, offsetY });
+            setAction("moving");
+            setElements((prev) => prev);
+          }
         } else {
           setSelectedElement({ element, offsetX: 0, offsetY: 0 });
           setAction("resizing");
@@ -130,28 +163,55 @@ export default function Canvas() {
 
     if (action === "drawing") {
       const index = elements.length - 1;
-      const { x1, y1 } = elements[index];
+      const { x1, y1 } = elements[index] as
+        | RectangleElement
+        | LineElement
+        | EllipseElement;
       updateElement(index, x1, y1, clientX, clientY, tool);
     } else if (action === "moving" && selectedElement) {
-      const { element, offsetX, offsetY } = selectedElement;
-      const { id, x1, y1, x2, y2, elementType } = element;
+      const { element, offsetX, offsetY, xOffsets, yOffsets } = selectedElement;
+      if (element.elementType === Tools.pen) {
+        const { id } = element;
+        const newPoints = (element as PenElement).points.map((_, index) => ({
+          x: clientX - xOffsets![index],
+          y: clientY - yOffsets![index],
+        }));
+        const elementsCopy = [...elements];
+        elementsCopy[id] = {
+          ...element,
+          points: newPoints,
+        };
+        setElements(elementsCopy, true);
+      } else {
+        const { id, x1, y1, x2, y2, elementType } = element as
+          | RectangleElement
+          | LineElement
+          | EllipseElement;
 
-      const width = x2 - x1;
-      const height = y2 - y1;
-      const nextX1 = clientX - offsetX;
-      const nextY1 = clientY - offsetY;
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const nextX1 = clientX - offsetX;
+        const nextY1 = clientY - offsetY;
 
-      updateElement(
-        id,
-        nextX1,
-        nextY1,
-        nextX1 + width,
-        nextY1 + height,
-        elementType
-      );
-    } else if (action === "resizing" && selectedElement) {
+        updateElement(
+          id,
+          nextX1,
+          nextY1,
+          nextX1 + width,
+          nextY1 + height,
+          elementType
+        );
+      }
+    } else if (
+      action === "resizing" &&
+      selectedElement &&
+      selectedElement.element.elementType !== Tools.pen
+    ) {
       const { element } = selectedElement;
-      const { id, elementType, position, ...coordinates } = element;
+      const { id, elementType, position, ...coordinates } = element as
+        | RectangleElement
+        | EllipseElement
+        | LineElement;
       if (position) {
         const { x1, y1, x2, y2 } = resizedCoordinates(
           clientX,
@@ -164,11 +224,19 @@ export default function Canvas() {
     }
   };
 
+  const isAdjustmentRequired = (tool: Tools) => {
+    return (
+      tool === Tools.rectangle || tool === Tools.ellipse || tool === Tools.line
+    );
+  };
+
   const onMouseUp = () => {
     if (
-      (elements.length > 0 && action === "drawing") ||
-      action === "resizing"
+      ((elements.length > 0 && action === "drawing") ||
+        action === "resizing") &&
+      isAdjustmentRequired(tool)
     ) {
+      console.log("adjusting");
       const index = elements.length - 1;
       const { id, elementType } = elements[index];
       const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
@@ -193,7 +261,7 @@ export default function Canvas() {
   return (
     <div className="h-full w-full relative">
       <div className="absolute top-0 left-1/2 z-50 transform -translate-x-1/2 mt-4">
-        <Toolbar setElementType={setTool} onClick={onClick} />
+        <Toolbar setElementType={setTool} onClick={onClick} clear={clear} />
       </div>
 
       <canvas
