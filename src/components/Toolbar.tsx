@@ -7,6 +7,7 @@ import {
   Pencil,
   Square,
   Trash2,
+  Type,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -49,6 +50,9 @@ const Toolbar = ({ setElementType, onClick, clear }: ToolbarProps) => {
       </ToggleGroupItem>
       <ToggleGroupItem value={Tools.ellipse} className="">
         <Circle />
+      </ToggleGroupItem>
+      <ToggleGroupItem value={Tools.text} className="">
+        <Type />
       </ToggleGroupItem>
       <ToggleGroupItem value={Tools.select} className="">
         <MousePointer2 />
