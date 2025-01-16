@@ -6,6 +6,7 @@ export enum Tools {
   ellipse = "ellipse",
   select = "select",
   pen = "pen",
+  text = "text",
 }
 
 export interface Point {
