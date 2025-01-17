@@ -44,7 +44,8 @@ export function createElement(
     case Tools.pen:
       return { id, elementType, points: [{ x: x1, y: y1 }] };
     case Tools.text:
-      return { id, elementType, x1, y1, text: text || "" };
+      if (text === "" || text === undefined) return null;
+      return { id, elementType, x1, y1, x2: 0, y2: 0, text: text };
     default:
       return null;
   }
@@ -75,6 +76,8 @@ export const drawElement = (
       break;
     case Tools.text:
       const { x1, y1, text } = element as TextElement;
+      if (text === "" || text === undefined) return;
+      ctx.textBaseline = "top";
       ctx.font = "24px sans-serif";
       ctx.fillStyle = "#000";
       ctx.fillText(text, x1, y1);
@@ -159,6 +162,10 @@ export const positionWithinElement = (
     })
       ? "inside"
       : null;
+  } else if (elementType === Tools.text) {
+    const { x1, y1, x2, y2 } = element as TextElement;
+    const inside = x >= x1 && x <= x2 && y >= y1 && y <= y2 ? "inside" : null;
+    return inside;
   }
   return null;
 };
