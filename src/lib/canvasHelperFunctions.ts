@@ -1,15 +1,17 @@
 import {
   Element,
+  ElementCoordinates,
   EllipseElement,
   LineElement,
   PenElement,
+  Point,
   RectangleElement,
+  TextElement,
   Tools,
 } from "@/types/canvasTypes";
-import { ElementCoordinates, Point } from "@/types/canvasTypes";
+import { getStroke } from "perfect-freehand";
 import { RoughCanvas } from "roughjs/bin/canvas";
 import rough from "roughjs/bin/rough";
-import { getStroke } from "perfect-freehand";
 
 export const generator = rough.generator({
   options: { maxRandomnessOffset: 0 },
@@ -21,7 +23,8 @@ export function createElement(
   y1: number,
   x2: number,
   y2: number,
-  elementType: Tools
+  elementType: Tools,
+  text?: string
 ): Element | null {
   let roughElement;
   switch (elementType) {
@@ -39,8 +42,9 @@ export function createElement(
       roughElement = generator.ellipse(cx, cy, width, height);
       return { id, x1, y1, x2, y2, roughElement, elementType };
     case Tools.pen:
-      //todo
       return { id, elementType, points: [{ x: x1, y: y1 }] };
+    case Tools.text:
+      return { id, elementType, x1, y1, text: text || "" };
     default:
       return null;
   }
@@ -64,12 +68,16 @@ export const drawElement = (
         smoothing: 0.5,
         streamline: 0.5,
       });
-
-      //ctx.beginPath();
       ctx.fillStyle = "#000";
       const pathData = getSvgPathFromStroke(stroke);
       const path = new Path2D(pathData);
       ctx.fill(path);
+      break;
+    case Tools.text:
+      const { x1, y1, text } = element as TextElement;
+      ctx.font = "24px sans-serif";
+      ctx.fillStyle = "#000";
+      ctx.fillText(text, x1, y1);
       break;
     default:
   }
