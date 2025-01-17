@@ -94,13 +94,24 @@ export default function Canvas() {
     setElements(elementsCopy, true);
   };
 
-  const updateText = (id: number, x1: number, y1: number, text: string) => {
+  const updateText = (
+    id: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    text: string
+  ) => {
     const elementsCopy = [...elements];
+    const width = canvasRef.current?.getContext("2d")?.measureText(text).width;
+    const height = 24;
     elementsCopy[id] = {
       id,
       elementType: Tools.text,
       x1,
       y1,
+      x2: x1 + width!,
+      y2: y1 + height,
       text,
     };
     setElements(elementsCopy, true);
@@ -116,7 +127,7 @@ export default function Canvas() {
         elementType: Tools.text,
         x1: clientX,
         y1: clientY,
-        text: "",
+        //text: undefined,
       } as TextElement;
       setElements([...elements, element]);
       setSelectedElement({ element, offsetX: 0, offsetY: 0 });
@@ -183,9 +194,10 @@ export default function Canvas() {
     const text = editableRef.current.innerText;
 
     if (text) {
-      updateText(id, x1, y1, text);
+      updateText(id, x1, y1, 0, 0, text);
     } else {
-      setElements(elements.filter((el) => el.id !== id));
+      undo();
+      //setElements(elements.filter((el) => el.id !== id));
     }
 
     setAction("none");
@@ -228,6 +240,13 @@ export default function Canvas() {
           points: newPoints,
         };
         setElements(elementsCopy, true);
+      } else if (element.elementType === Tools.text) {
+        const { id, x1, y1, x2, y2, text } = element as TextElement;
+        const width = x2 - x1;
+        const height = y2 - y1;
+        const nextX1 = clientX - offsetX;
+        const nextY1 = clientY - offsetY;
+        updateText(id, nextX1, nextY1, nextX1 + width, nextY1 + height, text);
       } else {
         const { id, x1, y1, x2, y2, elementType } = element as
           | RectangleElement
@@ -288,6 +307,14 @@ export default function Canvas() {
       updateElement(id, x1, y1, x2, y2, elementType);
     }
 
+    // if (selectedElement) {
+    //   const { element } = selectedElement;
+    //   if (element.elementType === Tools.text) {
+    //     setAction("writing");
+    //   }
+    //   return;
+    // }
+
     if (action === "writing") {
       return;
     }
@@ -344,6 +371,7 @@ export default function Canvas() {
       ) : null}
 
       <canvas
+        id="canvas"
         className="z-10"
         ref={canvasRef}
         onMouseDown={onMouseDown}
