@@ -14,7 +14,7 @@ export interface Point {
   y: number;
 }
 
-export type Action = "none" | "drawing" | "moving" | "resizing";
+export type Action = "none" | "drawing" | "moving" | "resizing" | "writing";
 
 export interface LineElement {
   id: number;
@@ -55,11 +55,22 @@ export interface PenElement {
   elementType: Tools.pen;
   position?: "topLeft" | "topRight" | "bottomLeft" | "bottomRight" | "inside";
 }
+
+export interface TextElement {
+  id: number;
+  x1: number;
+  y1: number;
+  text: string;
+  elementType: Tools.text;
+  position?: "topLeft" | "topRight" | "bottomLeft" | "bottomRight" | "inside";
+}
+
 export type Element =
   | LineElement
   | RectangleElement
   | EllipseElement
-  | PenElement;
+  | PenElement
+  | TextElement;
 
 export interface SelectedElement {
   element: Element;
