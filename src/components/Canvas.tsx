@@ -15,6 +15,7 @@ import {
   PenElement,
   RectangleElement,
   SelectedElement,
+  TextElement,
   Tools,
 } from "@/types/canvasTypes";
 import { Redo2, Undo2 } from "lucide-react";
@@ -38,6 +39,7 @@ export default function Canvas() {
   const [tool, setTool] = useState<Tools>(Tools.pen);
   const [selectedElement, setSelectedElement] =
     useState<SelectedElement | null>(null);
+  const editableRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -92,8 +94,35 @@ export default function Canvas() {
     setElements(elementsCopy, true);
   };
 
+  const updateText = (id: number, x1: number, y1: number, text: string) => {
+    const elementsCopy = [...elements];
+    elementsCopy[id] = {
+      id,
+      elementType: Tools.text,
+      x1,
+      y1,
+      text,
+    };
+    setElements(elementsCopy, true);
+  };
+
   const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (action === "writing") return;
     const { clientX, clientY } = e;
+    if (tool === Tools.text) {
+      const id = elements.length;
+      const element = {
+        id,
+        elementType: Tools.text,
+        x1: clientX,
+        y1: clientY,
+        text: "",
+      } as TextElement;
+      setElements([...elements, element]);
+      setSelectedElement({ element, offsetX: 0, offsetY: 0 });
+      setAction("writing");
+      return;
+    }
     if (tool === Tools.select) {
       const element = getElementAtPosition(clientX, clientY, elements);
       if (element) {
@@ -129,7 +158,6 @@ export default function Canvas() {
         }
       }
     } else {
-      setAction("drawing");
       const id = elements.length;
       const element = createElement(
         id,
@@ -142,13 +170,31 @@ export default function Canvas() {
       if (element) {
         setElements([...elements, element]);
         setSelectedElement({ element, offsetX: 0, offsetY: 0 });
+        setAction("drawing");
       }
     }
   };
 
+  const handleTextFinish = () => {
+    if (!selectedElement || !editableRef.current) return;
+
+    const { element } = selectedElement;
+    const { id, x1, y1 } = element as TextElement;
+    const text = editableRef.current.innerText;
+
+    if (text) {
+      updateText(id, x1, y1, text);
+    } else {
+      setElements(elements.filter((el) => el.id !== id));
+    }
+
+    setAction("none");
+    setSelectedElement(null);
+  };
+
   const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { clientX, clientY } = e;
-
+    if (action === "writing") return;
     if (action === "none" && tool === Tools.select) {
       const element = getElementAtPosition(clientX, clientY, elements);
       e.currentTarget.style.cursor = element
@@ -236,11 +282,14 @@ export default function Canvas() {
         action === "resizing") &&
       isAdjustmentRequired(tool)
     ) {
-      console.log("adjusting");
       const index = elements.length - 1;
       const { id, elementType } = elements[index];
       const { x1, y1, x2, y2 } = adjustElementCoordinates(elements[index]);
       updateElement(id, x1, y1, x2, y2, elementType);
+    }
+
+    if (action === "writing") {
+      return;
     }
 
     setAction("none");
@@ -263,6 +312,36 @@ export default function Canvas() {
       <div className="absolute top-0 left-1/2 z-50 transform -translate-x-1/2 mt-4">
         <Toolbar setElementType={setTool} onClick={onClick} clear={clear} />
       </div>
+
+      {action === "writing" && selectedElement ? (
+        <div
+          contentEditable
+          onBlur={handleTextFinish}
+          className="absolute min-w-[1px] min-h-[24px] outline-none whitespace-nowrap"
+          style={{
+            position: "absolute",
+            top: (selectedElement.element as TextElement).y1,
+            left: (selectedElement.element as TextElement).x1,
+            font: "24px sans-serif",
+            padding: "4px",
+            background: "white",
+            boxShadow: "0 0 0 1px rgba(0,0,0,0.1)",
+            zIndex: 30,
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          ref={(el) => {
+            editableRef.current = el;
+            if (el) {
+              requestAnimationFrame(() => el.focus());
+            }
+          }}
+        />
+      ) : null}
 
       <canvas
         className="z-10"
